@@ -51,19 +51,11 @@ cc_download[.ps1|.sh]               # 启动后交互选择模式：download / i
 
 **一行命令（推荐）：**
 
+> **注意**：Windows 系统推荐通过 `irm` 方式执行，因为在 PowerShell 5 环境下直接运行本地脚本，可能会因为中文编码问题报错。
+
 ```powershell
 # 运行后交互选择模式（download / install / update）
 irm https://raw.githubusercontent.com/ipfred/cc-download/master/cc_download.ps1 | iex
-
-# 本地脚本同样是交互选择模式
-.\cc_download.ps1
-```
-
-**手动下载脚本后运行：**
-
-```powershell
-# 运行后选择模式与目标
-.\cc_download.ps1
 ```
 
 ---

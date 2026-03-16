@@ -38,12 +38,6 @@ curl -fsSL https://raw.githubusercontent.com/ipfred/cc-download/master/cc_downlo
 
 ## Usage
 
-### 运行方式
-
-```
-cc_download[.ps1|.sh]               # 启动后交互选择模式：download / install / update
-                                    # install 模式可继续选择 target：默认 / latest / stable / 指定版本
-```
 
 ---
 
@@ -63,11 +57,20 @@ irm https://raw.githubusercontent.com/ipfred/cc-download/master/cc_download.ps1 
 ### Linux / macOS
 
 ```bash
-# 运行后交互选择模式与目标
-bash cc_download.sh
+curl -fsSL https://raw.githubusercontent.com/ipfred/cc-download/master/cc_download.sh | bash
 ```
 
 ---
+
+### npm 方式安装（不用设置tun代理，使用npm镜像下载安装）
+不想使用原生方式安装 可使用npm安装 后续更新也只能用npm, claude update命令没有
+
+### npm安装/更新
+
+```bash
+npm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com
+```
 
 ### 交互流程示例
 

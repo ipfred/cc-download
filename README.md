@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/ipfred/cc-download/master/cc_downlo
 
 ---
 
-### npm 方式安装（不用设置tun代理，使用npm镜像下载安装）
+### npm 方式安装（官方虽然说废弃，仍然能用，不用设置tun代理，使用npm镜像下载安装）
 不想使用原生方式安装 可使用npm安装 后续更新也只能用npm, claude update命令没有
 
 ### npm安装/更新

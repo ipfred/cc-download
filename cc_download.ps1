@@ -61,6 +61,11 @@ if ($typeChoice -ne "2") {
     if ([string]::IsNullOrWhiteSpace($portInput)) { $portInput = "7897" }
     $proxyUri  = "http://127.0.0.1:$portInput"
     $curlProxy = @("--proxy", $proxyUri)
+    # proxy env
+    $env:HTTP_PROXY  = $proxyUri
+    $env:http_proxy  = $proxyUri
+    $env:HTTPS_PROXY = $proxyUri
+    $env:https_proxy = $proxyUri
     Write-Host "使用代理: $proxyUri"
 } else {
     Write-Host "不使用代理，直接连接。"

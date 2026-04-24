@@ -191,19 +191,24 @@ detect_platform() {
     echo "$platform"
 }
 
-# ── 从官方 install.sh 动态解析 GCS_BUCKET ────────────────────────────────────
+# ── 从官方 install.sh 动态解析下载基础 URL ───────────────────────────────────
 echo ""
 echo "获取最新安装脚本..."
 install_script=$(download_quiet "https://claude.ai/install.sh")
 
 GCS_BUCKET=""
-[[ "$install_script" =~ GCS_BUCKET=\"([^\"]+)\" ]] && GCS_BUCKET="${BASH_REMATCH[1]}"
+# 新版 bootstrap.sh 使用 DOWNLOAD_BASE_URL，旧版使用 GCS_BUCKET
+if [[ "$install_script" =~ DOWNLOAD_BASE_URL=\"([^\"]+)\" ]]; then
+    GCS_BUCKET="${BASH_REMATCH[1]}"
+elif [[ "$install_script" =~ GCS_BUCKET=\"([^\"]+)\" ]]; then
+    GCS_BUCKET="${BASH_REMATCH[1]}"
+fi
 
 if [[ -z "$GCS_BUCKET" ]]; then
     echo "---- install.sh 内容预览 ----"
     echo "${install_script:0:300}"
     echo "-----------------------------"
-    echo "无法解析 GCS_BUCKET，脚本格式可能已变更" >&2; exit 1
+    echo "无法解析下载基础 URL（DOWNLOAD_BASE_URL / GCS_BUCKET），脚本格式可能已变更" >&2; exit 1
 fi
 
 # ════════════════════════════════════════════════════════════════════════════════

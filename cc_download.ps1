@@ -38,6 +38,34 @@ if ($Mode -eq "install") {
         }
         default { $Target = "" }
     }
+
+    # ── 选择安装方式 ──────────────────────────────────────────────────────────
+    Write-Host ""
+    Write-Host "选择安装方式："
+    Write-Host "  1) npm 安装（推荐 Windows 用户使用）"
+    Write-Host "  2) 二进制直接安装"
+    Write-Host ""
+    $installMethod = Read-Host "输入选项 [1/2]"
+
+    if ($installMethod -eq "1") {
+        Write-Host ""
+        Write-Host "正在通过 npm 安装 Claude Code..."
+        npm install -g @anthropic-ai/claude-code 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "npm 安装失败"
+            exit 1
+        }
+        Write-Host ""
+        Write-Host "npm 安装完成！"
+        Write-Host ""
+        Write-Host "提示：建议在 settings.json 中新增配置避免安装检查："
+        Write-Host '  "DISABLE_INSTALLATION_CHECKS": "1"'
+        Write-Host "  配置文件位置: $env:USERPROFILE\.claude\settings.json"
+        Write-Host ""
+        Write-Host "✅ 完成！"
+        Write-Host ""
+        exit 0
+    }
 }
 
 # ── 32 位检查（仅 install / update 模式）─────────────────────────────────────
@@ -262,6 +290,35 @@ if ($Mode -eq "") {
 
     Write-Host "已安装位置: $foundPath"
     Write-Host "当前版本: $(if ($currentVersion) { $currentVersion } else { '未知' })"
+
+    # ── 检查是否 npm 安装 ────────────────────────────────────────────────────
+    $npmGlobalRoot = $null
+    try { $npmGlobalRoot = (npm root -g 2>$null).Trim() } catch {}
+    if ($npmGlobalRoot -and $foundPath.StartsWith($npmGlobalRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        Write-Host ""
+        Write-Host "检测到 npm 安装的 claude，使用 npm 更新..."
+        $oldVer = if ($currentVersion) { $currentVersion } else { "未知" }
+        npm install -g @anthropic-ai/claude-code 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "npm 更新失败"
+            exit 1
+        }
+        try {
+            $newVerOutput = & $foundPath --version 2>&1 | Out-String
+            $newVerMatch  = [regex]::Match($newVerOutput, '(\d+\.\d+\.\d+\S*)')
+            if ($newVerMatch.Success) { $newVer = $newVerMatch.Groups[1].Value }
+        } catch {}
+        Write-Host ""
+        Write-Host "npm 更新完成：$oldVer -> $($newVer ?? '最新')"
+        Write-Host ""
+        Write-Host "提示：建议在 settings.json 中新增配置避免安装检查："
+        Write-Host '  "DISABLE_INSTALLATION_CHECKS": "1"'
+        Write-Host "  配置文件位置: $env:USERPROFILE\.claude\settings.json"
+        Write-Host ""
+        Write-Host "✅ 完成！"
+        Write-Host ""
+        exit 0
+    }
 
     # ── 获取最新版本号 ─────────────────────────────────────────────────────────
     $latestVersion = (curl.exe -s @curlProxy "$GCS_BUCKET/latest").Trim()

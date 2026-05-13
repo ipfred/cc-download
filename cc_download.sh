@@ -40,6 +40,34 @@ if [[ "$MODE" == "install" ]]; then
             ;;
         *) TARGET="" ;;
     esac
+
+    # ── 选择安装方式 ──────────────────────────────────────────────────────────
+    echo ""
+    echo "选择安装方式："
+    echo "  1) npm 安装（推荐 macOS/Linux 用户使用）"
+    echo "  2) 二进制直接安装"
+    echo ""
+    read -r -p "输入选项 [1/2]: " install_method < /dev/tty
+
+    if [[ "$install_method" == "1" ]]; then
+        echo ""
+        echo "正在通过 npm 安装 Claude Code..."
+        if npm install -g @anthropic-ai/claude-code; then
+            echo ""
+            echo "npm 安装完成！"
+            echo ""
+            echo "提示：建议在 settings.json 中新增配置避免安装检查："
+            echo '  "DISABLE_INSTALLATION_CHECKS": "1"'
+            echo "  配置文件位置: \$HOME/.claude/settings.json"
+            echo ""
+            echo "✅ 完成！"
+            echo ""
+            exit 0
+        else
+            echo "npm 安装失败" >&2
+            exit 1
+        fi
+    fi
 fi
 
 # ── 代理选择 ──────────────────────────────────────────────────────────────────
@@ -330,6 +358,35 @@ elif [[ "$MODE" == "update" ]]; then
 
     echo "已安装位置: $found_path"
     echo "当前版本: ${current_version:-未知}"
+
+    # ── 检查是否 npm 安装 ────────────────────────────────────────────────────
+    npm_global_root=""
+    if command -v npm >/dev/null 2>&1; then
+        npm_global_root=$(npm root -g 2>/dev/null || true)
+    fi
+    if [[ -n "$npm_global_root" && "$found_path" == "$npm_global_root"* ]]; then
+        echo ""
+        echo "检测到 npm 安装的 claude，使用 npm 更新..."
+        old_ver="${current_version:-未知}"
+        if npm install -g @anthropic-ai/claude-code; then
+            new_ver=""
+            ver_out=$(claude --version 2>&1 || true)
+            [[ "$ver_out" =~ ([0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*) ]] && new_ver="${BASH_REMATCH[1]}"
+            echo ""
+            echo "npm 更新完成：$old_ver -> ${new_ver:-最新}"
+            echo ""
+            echo "提示：建议在 settings.json 中新增配置避免安装检查："
+            echo '  "DISABLE_INSTALLATION_CHECKS": "1"'
+            echo "  配置文件位置: \$HOME/.claude/settings.json"
+            echo ""
+            echo "✅ 完成！"
+            echo ""
+            exit 0
+        else
+            echo "npm 更新失败" >&2
+            exit 1
+        fi
+    fi
 
     # ── 获取最新版本号 ─────────────────────────────────────────────────────────
     latest_version=$(download_quiet "$GCS_BUCKET/latest" | tr -d '[:space:]')

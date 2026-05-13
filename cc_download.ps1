@@ -267,9 +267,9 @@ if ($Mode -eq "download") {
 # ════ 更新模式 ════════════════════════════════════════════════════════════════
 
     # ── 检查已安装的 claude ────────────────────────────────────────────────────
-    $claudeCmd = Get-Command claude.exe -ErrorAction SilentlyContinue
+    $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
     if (-not $claudeCmd) {
-        Write-Error "未找到已安装的 claude.exe，请重新运行脚本并选择 install 模式。"
+        Write-Error "未找到已安装的 claude，请重新运行脚本并选择 install 模式。"
         exit 1
     }
 

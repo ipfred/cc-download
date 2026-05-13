@@ -71,7 +71,7 @@ if ($typeChoice -ne "2") {
     Write-Host "不使用代理，直接连接。"
 }
 
-# ── 从官方 install.ps1 动态解析 GCS_BUCKET ────────────────────────────────────
+# ── 从官方 install.ps1 动态解析下载基础 URL ───────────────────────────────────
 Write-Host ""
 Write-Host "获取最新安装脚本..."
 $installScript = curl.exe -s -L @curlProxy "https://claude.ai/install.ps1"
@@ -80,13 +80,17 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$bucketMatch = [regex]::Match($installScript, '\$GCS_BUCKET\s*=\s*"([^"]+)"')
+# 新版 bootstrap.ps1 使用 $DOWNLOAD_BASE_URL，旧版使用 $GCS_BUCKET
+$bucketMatch = [regex]::Match($installScript, '\$DOWNLOAD_BASE_URL\s*=\s*"([^"]+)"')
+if (-not $bucketMatch.Success) {
+    $bucketMatch = [regex]::Match($installScript, '\$GCS_BUCKET\s*=\s*"([^"]+)"')
+}
 if (-not $bucketMatch.Success) {
     $preview = if ($installScript.Length -gt 300) { $installScript.Substring(0, 300) } else { $installScript }
     Write-Host "---- install.ps1 返回内容预览 ----"
     Write-Host $preview
     Write-Host "----------------------------------"
-    Write-Error "无法从 install.ps1 解析 GCS_BUCKET，脚本格式可能已变更"
+    Write-Error "无法从 install.ps1 解析下载基础 URL（DOWNLOAD_BASE_URL / GCS_BUCKET），脚本格式可能已变更"
     exit 1
 }
 $GCS_BUCKET = $bucketMatch.Groups[1].Value

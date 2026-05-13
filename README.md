@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/ipfred/cc-download/master/cc_downlo
 
 ## Pain Points / 解决了什么问题
 
-- Claude Code 不支持 npm 方式下载更新，官方脚本在 Windows 上只能开 tun 模式使用
+- 官方安装脚本在 Windows 上只能开 tun 模式使用
 - 官方脚本更新没有进度且下载很慢，每次不知道是卡死了还是在下载
 - 没有公网的服务器上无法直接安装，官方没有离线下载安装包的方式
 
@@ -62,15 +62,18 @@ curl -fsSL https://raw.githubusercontent.com/ipfred/cc-download/master/cc_downlo
 
 ---
 
-### npm 方式安装（官方虽然说废弃，仍然能用，不用设置tun代理，使用npm镜像下载安装）
+### 🚀npm 方式安装（官方虽然说废弃，仍然能用，不用设置tun代理，使用npm镜像下载安装）
 不想使用原生方式安装 可使用npm安装 后续更新也只能用npm, claude update命令没有
 
-### npm安装/更新
+### npm安装/更新(windows系统推荐这种)
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com
 ```
+> 防止每次提醒不是原生安装
+> .claude\settings.json "env": {} 中新增配置 "DISABLE_INSTALLATION_CHECKS": "1"
+
 
 ### 交互流程示例
 

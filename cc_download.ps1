@@ -2,19 +2,19 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ── 交互式模式选择 ────────────────────────────────────────────────────────────
-$Mode = ""     # "" = download
+$Mode = "update"
 $Target = ""
 Write-Host ""
 Write-Host "选择运行模式："
-Write-Host "  1) download  下载离线安装包（默认）"
+Write-Host "  1) update    更新 Claude Code（默认）"
 Write-Host "  2) install   安装 Claude Code"
-Write-Host "  3) update    更新 Claude Code"
+Write-Host "  3) download  下载离线安装包"
 Write-Host ""
 $modeChoice = Read-Host "输入选项 [1/2/3]"
 switch ($modeChoice) {
     "2" { $Mode = "install" }
-    "3" { $Mode = "update"  }
-    default { $Mode = ""    }
+    "3" { $Mode = "download" }
+    default { $Mode = "update" }
 }
 
 if ($Mode -eq "install") {
@@ -69,55 +69,54 @@ if ($Mode -eq "install") {
 }
 
 # ── 32 位检查（仅 install / update 模式）─────────────────────────────────────
-if ($Mode -ne "" -and -not [Environment]::Is64BitProcess) {
+if ($Mode -ne "download" -and -not [Environment]::Is64BitProcess) {
     Write-Error "Claude Code 不支持 32 位 Windows。"
     exit 1
 }
 
 # ── 代理选择 ──────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "请选择代理类型："
-Write-Host "  1) HTTP 代理（默认）"
-Write-Host "  2) 不使用代理"
-Write-Host ""
-$typeChoice = Read-Host "输入选项 [1/2]"
-
 $curlProxy = @()
 $proxyUri  = ""
-if ($typeChoice -ne "2") {
-    $portInput = Read-Host "输入代理端口 [默认: 7897]"
-    if ([string]::IsNullOrWhiteSpace($portInput)) { $portInput = "7897" }
-    $proxyUri  = "http://127.0.0.1:$portInput"
+
+# 检测系统环境变量中的代理设置
+$detectedProxy = $env:https_proxy
+if (-not $detectedProxy) { $detectedProxy = $env:HTTPS_PROXY }
+if (-not $detectedProxy) { $detectedProxy = $env:http_proxy }
+if (-not $detectedProxy) { $detectedProxy = $env:HTTP_PROXY }
+
+if ($detectedProxy) {
+    Write-Host ""
+    Write-Host "检测到系统代理: $detectedProxy"
+    $proxyUri  = $detectedProxy
     $curlProxy = @("--proxy", $proxyUri)
-    # proxy env
     $env:HTTP_PROXY  = $proxyUri
     $env:http_proxy  = $proxyUri
     $env:HTTPS_PROXY = $proxyUri
     $env:https_proxy = $proxyUri
-    Write-Host "使用代理: $proxyUri"
 } else {
-    Write-Host "不使用代理，直接连接。"
+    Write-Host ""
+    Write-Host "请选择代理类型："
+    Write-Host "  1) HTTP 代理（默认）"
+    Write-Host "  2) 不使用代理"
+    Write-Host ""
+    $typeChoice = Read-Host "输入选项 [1/2]"
+
+    if ($typeChoice -ne "2") {
+        $portInput = Read-Host "输入代理端口 [默认: 7897]"
+        if ([string]::IsNullOrWhiteSpace($portInput)) { $portInput = "7897" }
+        $proxyUri  = "http://127.0.0.1:$portInput"
+        $curlProxy = @("--proxy", $proxyUri)
+        $env:HTTP_PROXY  = $proxyUri
+        $env:http_proxy  = $proxyUri
+        $env:HTTPS_PROXY = $proxyUri
+        $env:https_proxy = $proxyUri
+        Write-Host "使用代理: $proxyUri"
+    } else {
+        Write-Host "不使用代理，直接连接。"
+    }
 }
 
-# ── 从官方 install.ps1 动态解析 GCS_BUCKET ────────────────────────────────────
-Write-Host ""
-Write-Host "获取最新安装脚本..."
-$installScript = curl.exe -s -L @curlProxy "https://claude.ai/install.ps1"
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "获取 install.ps1 失败（退出码 $LASTEXITCODE）"
-    exit 1
-}
-
-$bucketMatch = [regex]::Match($installScript, '\$GCS_BUCKET\s*=\s*"([^"]+)"')
-if (-not $bucketMatch.Success) {
-    $preview = if ($installScript.Length -gt 300) { $installScript.Substring(0, 300) } else { $installScript }
-    Write-Host "---- install.ps1 返回内容预览 ----"
-    Write-Host $preview
-    Write-Host "----------------------------------"
-    Write-Error "无法从 install.ps1 解析 GCS_BUCKET，脚本格式可能已变更"
-    exit 1
-}
-$GCS_BUCKET = $bucketMatch.Groups[1].Value
+$DOWNLOAD_BASE_URL = "https://downloads.claude.ai/claude-code-releases"
 
 # ── 下载或复用已缓存的 claude 二进制 ──────────────────────────────────────────
 function Get-ClaudeBinary {
@@ -156,7 +155,7 @@ function Get-ClaudeBinary {
 }
 
 # ════════════════════════════════════════════════════════════════════════════════
-if ($Mode -eq "") {
+if ($Mode -eq "download") {
 # ════ 下载模式 ════════════════════════════════════════════════════════════════
 
     # ── 选择目标平台 ──────────────────────────────────────────────────────────
@@ -206,7 +205,7 @@ if ($Mode -eq "") {
     if ($channel -match '^\d+\.\d+\.\d+') {
         $version = $channel
     } else {
-        $version = (curl.exe -s @curlProxy "$GCS_BUCKET/$channel").Trim()
+        $version = (curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/$channel").Trim()
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
             Write-Error "获取 $channel 版本号失败"; exit 1
         }
@@ -216,7 +215,7 @@ if ($Mode -eq "") {
     # ── 获取 manifest & checksum ──────────────────────────────────────────────
     Write-Host ""
     Write-Host "获取版本清单..."
-    $manifestJson = curl.exe -s @curlProxy "$GCS_BUCKET/$version/manifest.json"
+    $manifestJson = curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/$version/manifest.json"
     if ($LASTEXITCODE -ne 0) { Write-Error "获取 manifest.json 失败"; exit 1 }
     $manifest = $manifestJson | ConvertFrom-Json
     $checksum = $manifest.platforms.($selPlatform.Name).checksum
@@ -227,7 +226,7 @@ if ($Mode -eq "") {
     $remoteBin  = if ($selPlatform.IsWin) { "claude.exe" } else { "claude" }
     $binaryName = "claude-$version-$($selPlatform.Name)$ext"
     $outputPath = Join-Path (Get-Location) $binaryName
-    $downloadUrl = "$GCS_BUCKET/$version/$($selPlatform.Name)/$remoteBin"
+    $downloadUrl = "$DOWNLOAD_BASE_URL/$version/$($selPlatform.Name)/$remoteBin"
     Write-Host "保存目录: $(Get-Location)"
     Get-ClaudeBinary -BinaryPath $outputPath -DownloadUrl $downloadUrl `
                      -Checksum $checksum -Label $binaryName `
@@ -321,7 +320,7 @@ if ($Mode -eq "") {
     }
 
     # ── 获取最新版本号 ─────────────────────────────────────────────────────────
-    $latestVersion = (curl.exe -s @curlProxy "$GCS_BUCKET/latest").Trim()
+    $latestVersion = (curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/latest").Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($latestVersion)) {
         Write-Error "获取最新版本号失败"; exit 1
     }
@@ -343,7 +342,7 @@ if ($Mode -eq "") {
     # ── 获取 manifest & checksum ──────────────────────────────────────────────
     Write-Host ""
     Write-Host "获取版本清单..."
-    $manifestJson = curl.exe -s @curlProxy "$GCS_BUCKET/$latestVersion/manifest.json"
+    $manifestJson = curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/$latestVersion/manifest.json"
     if ($LASTEXITCODE -ne 0) { Write-Error "获取 manifest.json 失败"; exit 1 }
     $manifest = $manifestJson | ConvertFrom-Json
     $checksum = $manifest.platforms.$platform.checksum
@@ -351,7 +350,7 @@ if ($Mode -eq "") {
 
     # ── 下载或复用缓存 ─────────────────────────────────────────────────────────
     $binaryPath  = "$dlDir\claude-$latestVersion-$platform.exe"
-    $downloadUrl = "$GCS_BUCKET/$latestVersion/$platform/claude.exe"
+    $downloadUrl = "$DOWNLOAD_BASE_URL/$latestVersion/$platform/claude.exe"
     Get-ClaudeBinary -BinaryPath $binaryPath -DownloadUrl $downloadUrl `
                      -Checksum $checksum -Label "claude.exe ($latestVersion / $platform)" `
                      -Proxy $curlProxy
@@ -400,7 +399,7 @@ if ($Mode -eq "") {
     Write-Host "下载目录: $dlDir"
 
     # ── 获取最新版本号 ─────────────────────────────────────────────────────────
-    $latestVersion = (curl.exe -s @curlProxy "$GCS_BUCKET/latest").Trim()
+    $latestVersion = (curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/latest").Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($latestVersion)) {
         Write-Error "获取最新版本号失败"; exit 1
     }
@@ -448,7 +447,7 @@ if ($Mode -eq "") {
     # ── 获取 manifest & checksum ──────────────────────────────────────────────
     Write-Host ""
     Write-Host "获取版本清单..."
-    $manifestJson = curl.exe -s @curlProxy "$GCS_BUCKET/$latestVersion/manifest.json"
+    $manifestJson = curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/$latestVersion/manifest.json"
     if ($LASTEXITCODE -ne 0) { Write-Error "获取 manifest.json 失败"; exit 1 }
     $manifest = $manifestJson | ConvertFrom-Json
     $checksum = $manifest.platforms.$platform.checksum
@@ -456,7 +455,7 @@ if ($Mode -eq "") {
 
     # ── 下载或复用缓存 ─────────────────────────────────────────────────────────
     $binaryPath  = "$dlDir\claude-$latestVersion-$platform.exe"
-    $downloadUrl = "$GCS_BUCKET/$latestVersion/$platform/claude.exe"
+    $downloadUrl = "$DOWNLOAD_BASE_URL/$latestVersion/$platform/claude.exe"
     Get-ClaudeBinary -BinaryPath $binaryPath -DownloadUrl $downloadUrl `
                      -Checksum $checksum -Label "claude.exe ($latestVersion / $platform)" `
                      -Proxy $curlProxy

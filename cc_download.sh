@@ -3,20 +3,20 @@
 set -e
 
 # ── 交互式模式选择 ────────────────────────────────────────────────────────────
-MODE=""
+MODE="update"
 TARGET=""
 echo ""
 echo "选择运行模式："
-echo "  1) download  下载离线安装包（默认）"
+echo "  1) update    更新 Claude Code（默认）"
 echo "  2) install   安装 Claude Code"
-echo "  3) update    更新 Claude Code"
+echo "  3) download  下载离线安装包"
 echo ""
 read -r -p "输入选项 [1/2/3]: " mode_choice < /dev/tty
 
 case "$mode_choice" in
     2) MODE="install" ;;
-    3) MODE="update" ;;
-    *) MODE="" ;;
+    3) MODE="download" ;;
+    *) MODE="update" ;;
 esac
 
 if [[ "$MODE" == "install" ]]; then
@@ -71,26 +71,37 @@ if [[ "$MODE" == "install" ]]; then
 fi
 
 # ── 代理选择 ──────────────────────────────────────────────────────────────────
-echo ""
-echo "请选择代理类型："
-echo "  1) HTTP 代理（默认）"
-echo "  2) 不使用代理"
-echo ""
-read -r -p "输入选项 [1/2]: " type_choice < /dev/tty
-
 PROXY_URL=""
 CURL_PROXY_ARGS=()
 
-if [[ "$type_choice" != "2" ]]; then
-    read -r -p "输入代理端口 [默认: 7897]: " port_input < /dev/tty
-    port_input="${port_input:-7897}"
-    PROXY_URL="http://127.0.0.1:$port_input"
+# 检测系统环境变量中的代理设置
+DETECTED_PROXY="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
+if [[ -n "$DETECTED_PROXY" ]]; then
+    echo ""
+    echo "检测到系统代理: $DETECTED_PROXY"
+    PROXY_URL="$DETECTED_PROXY"
     CURL_PROXY_ARGS=(--proxy "$PROXY_URL")
     export http_proxy="$PROXY_URL" https_proxy="$PROXY_URL"
     export HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL"
-    echo "使用代理: $PROXY_URL"
 else
-    echo "不使用代理，直接连接。"
+    echo ""
+    echo "请选择代理类型："
+    echo "  1) HTTP 代理（默认）"
+    echo "  2) 不使用代理"
+    echo ""
+    read -r -p "输入选项 [1/2]: " type_choice < /dev/tty
+
+    if [[ "$type_choice" != "2" ]]; then
+        read -r -p "输入代理端口 [默认: 7897]: " port_input < /dev/tty
+        port_input="${port_input:-7897}"
+        PROXY_URL="http://127.0.0.1:$port_input"
+        CURL_PROXY_ARGS=(--proxy "$PROXY_URL")
+        export http_proxy="$PROXY_URL" https_proxy="$PROXY_URL"
+        export HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL"
+        echo "使用代理: $PROXY_URL"
+    else
+        echo "不使用代理，直接连接。"
+    fi
 fi
 
 # ── 检测下载工具 ──────────────────────────────────────────────────────────────
@@ -219,23 +230,11 @@ detect_platform() {
     echo "$platform"
 }
 
-# ── 从官方 install.sh 动态解析 GCS_BUCKET ────────────────────────────────────
-echo ""
-echo "获取最新安装脚本..."
-install_script=$(download_quiet "https://claude.ai/install.sh")
-
-GCS_BUCKET=""
-[[ "$install_script" =~ GCS_BUCKET=\"([^\"]+)\" ]] && GCS_BUCKET="${BASH_REMATCH[1]}"
-
-if [[ -z "$GCS_BUCKET" ]]; then
-    echo "---- install.sh 内容预览 ----"
-    echo "${install_script:0:300}"
-    echo "-----------------------------"
-    echo "无法解析 GCS_BUCKET，脚本格式可能已变更" >&2; exit 1
-fi
+# ── 下载地址 ──────────────────────────────────────────────────────────────────
+DOWNLOAD_BASE_URL="https://downloads.claude.ai/claude-code-releases"
 
 # ════════════════════════════════════════════════════════════════════════════════
-if [[ -z "$MODE" ]]; then
+if [[ "$MODE" == "download" ]]; then
 # ════ 下载模式 ════════════════════════════════════════════════════════════════
 
     # ── 选择目标平台 ──────────────────────────────────────────────────────────
@@ -288,7 +287,7 @@ if [[ -z "$MODE" ]]; then
     if [[ "$channel" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
         VERSION="$channel"
     else
-        VERSION=$(download_quiet "$GCS_BUCKET/$channel" | tr -d '[:space:]')
+        VERSION=$(download_quiet "$DOWNLOAD_BASE_URL/$channel" | tr -d '[:space:]')
         [[ -z "$VERSION" ]] && { echo "获取 $channel 版本号失败" >&2; exit 1; }
     fi
     echo "版本: $VERSION"
@@ -296,7 +295,7 @@ if [[ -z "$MODE" ]]; then
     # ── 获取 manifest & checksum ──────────────────────────────────────────────
     echo ""
     echo "获取版本清单..."
-    manifest_json=$(download_quiet "$GCS_BUCKET/$VERSION/manifest.json")
+    manifest_json=$(download_quiet "$DOWNLOAD_BASE_URL/$VERSION/manifest.json")
     [[ -z "$manifest_json" ]] && { echo "获取 manifest.json 失败" >&2; exit 1; }
     checksum=$(fetch_checksum "$manifest_json" "$PLATFORM")
 
@@ -306,7 +305,7 @@ if [[ -z "$MODE" ]]; then
 
     binary_name="claude-$VERSION-$PLATFORM$EXT"
     output_path="$(pwd)/$binary_name"
-    download_url="$GCS_BUCKET/$VERSION/$PLATFORM/$REMOTE_BIN"
+    download_url="$DOWNLOAD_BASE_URL/$VERSION/$PLATFORM/$REMOTE_BIN"
     echo "保存目录: $(pwd)"
     ensure_binary "$output_path" "$download_url" "$checksum" "$binary_name" || exit 1
     [ "$IS_WIN" = "false" ] && chmod +x "$output_path"
@@ -389,7 +388,7 @@ elif [[ "$MODE" == "update" ]]; then
     fi
 
     # ── 获取最新版本号 ─────────────────────────────────────────────────────────
-    latest_version=$(download_quiet "$GCS_BUCKET/latest" | tr -d '[:space:]')
+    latest_version=$(download_quiet "$DOWNLOAD_BASE_URL/latest" | tr -d '[:space:]')
     [[ -z "$latest_version" ]] && { echo "获取最新版本号失败" >&2; exit 1; }
     echo "最新版本: $latest_version"
 
@@ -409,13 +408,13 @@ elif [[ "$MODE" == "update" ]]; then
     # ── 获取 manifest & checksum ──────────────────────────────────────────────
     echo ""
     echo "获取版本清单..."
-    manifest_json=$(download_quiet "$GCS_BUCKET/$latest_version/manifest.json")
+    manifest_json=$(download_quiet "$DOWNLOAD_BASE_URL/$latest_version/manifest.json")
     [[ -z "$manifest_json" ]] && { echo "获取 manifest.json 失败" >&2; exit 1; }
     checksum=$(fetch_checksum "$manifest_json" "$platform")
 
     # ── 下载或复用缓存 ─────────────────────────────────────────────────────────
     binary_path="$DOWNLOAD_DIR/claude-$latest_version-$platform"
-    download_url="$GCS_BUCKET/$latest_version/$platform/claude"
+    download_url="$DOWNLOAD_BASE_URL/$latest_version/$platform/claude"
     ensure_binary "$binary_path" "$download_url" "$checksum" \
                   "claude ($latest_version / $platform)" || exit 1
     chmod +x "$binary_path"
@@ -453,7 +452,7 @@ elif [[ "$MODE" == "install" ]]; then
     echo "下载目录: $DOWNLOAD_DIR"
 
     # ── 获取最新版本号 ─────────────────────────────────────────────────────────
-    latest_version=$(download_quiet "$GCS_BUCKET/latest" | tr -d '[:space:]')
+    latest_version=$(download_quiet "$DOWNLOAD_BASE_URL/latest" | tr -d '[:space:]')
     [[ -z "$latest_version" ]] && { echo "获取最新版本号失败" >&2; exit 1; }
     echo "最新版本: $latest_version"
 
@@ -481,13 +480,13 @@ elif [[ "$MODE" == "install" ]]; then
     # ── 获取 manifest & checksum ──────────────────────────────────────────────
     echo ""
     echo "获取版本清单..."
-    manifest_json=$(download_quiet "$GCS_BUCKET/$latest_version/manifest.json")
+    manifest_json=$(download_quiet "$DOWNLOAD_BASE_URL/$latest_version/manifest.json")
     [[ -z "$manifest_json" ]] && { echo "获取 manifest.json 失败" >&2; exit 1; }
     checksum=$(fetch_checksum "$manifest_json" "$platform")
 
     # ── 下载或复用缓存 ─────────────────────────────────────────────────────────
     binary_path="$DOWNLOAD_DIR/claude-$latest_version-$platform"
-    download_url="$GCS_BUCKET/$latest_version/$platform/claude"
+    download_url="$DOWNLOAD_BASE_URL/$latest_version/$platform/claude"
     ensure_binary "$binary_path" "$download_url" "$checksum" \
                   "claude ($latest_version / $platform)" || exit 1
     chmod +x "$binary_path"

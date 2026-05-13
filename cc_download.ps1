@@ -290,10 +290,24 @@ if ($Mode -eq "download") {
     Write-Host "已安装位置: $foundPath"
     Write-Host "当前版本: $(if ($currentVersion) { $currentVersion } else { '未知' })"
 
+    # ── 获取最新版本号 ─────────────────────────────────────────────────────────
+    $latestVersion = (curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/latest").Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($latestVersion)) {
+        Write-Error "获取最新版本号失败"; exit 1
+    }
+    Write-Host "最新版本: $latestVersion"
+
+    if ($currentVersion -eq $latestVersion) {
+        Write-Host ""
+        Write-Host "已是最新版本（$latestVersion），无需更新。"
+        exit 0
+    }
+    if ($currentVersion) { Write-Host "需要更新: $currentVersion -> $latestVersion" }
+
     # ── 检查是否 npm 安装 ────────────────────────────────────────────────────
-    $npmGlobalRoot = $null
-    try { $npmGlobalRoot = (npm root -g 2>$null).Trim() } catch {}
-    if ($npmGlobalRoot -and $foundPath.StartsWith($npmGlobalRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    $npmPrefix = $null
+    try { $npmPrefix = (npm config get prefix 2>$null).Trim() } catch {}
+    if ($npmPrefix -and $foundPath.StartsWith($npmPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         Write-Host ""
         Write-Host "检测到 npm 安装的 claude，使用 npm 更新..."
         $oldVer = if ($currentVersion) { $currentVersion } else { "未知" }
@@ -318,20 +332,6 @@ if ($Mode -eq "download") {
         Write-Host ""
         exit 0
     }
-
-    # ── 获取最新版本号 ─────────────────────────────────────────────────────────
-    $latestVersion = (curl.exe -s @curlProxy "$DOWNLOAD_BASE_URL/latest").Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($latestVersion)) {
-        Write-Error "获取最新版本号失败"; exit 1
-    }
-    Write-Host "最新版本: $latestVersion"
-
-    if ($currentVersion -eq $latestVersion) {
-        Write-Host ""
-        Write-Host "已是最新版本（$latestVersion），无需更新。"
-        exit 0
-    }
-    if ($currentVersion) { Write-Host "需要更新: $currentVersion -> $latestVersion" }
 
     # ── 平台 & 下载目录 ────────────────────────────────────────────────────────
     $platform = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "win32-arm64" } else { "win32-x64" }

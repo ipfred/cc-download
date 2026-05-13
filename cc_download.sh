@@ -358,12 +358,24 @@ elif [[ "$MODE" == "update" ]]; then
     echo "已安装位置: $found_path"
     echo "当前版本: ${current_version:-未知}"
 
-    # ── 检查是否 npm 安装 ────────────────────────────────────────────────────
-    npm_global_root=""
-    if command -v npm >/dev/null 2>&1; then
-        npm_global_root=$(npm root -g 2>/dev/null || true)
+    # ── 获取最新版本号 ─────────────────────────────────────────────────────────
+    latest_version=$(download_quiet "$DOWNLOAD_BASE_URL/latest" | tr -d '[:space:]')
+    [[ -z "$latest_version" ]] && { echo "获取最新版本号失败" >&2; exit 1; }
+    echo "最新版本: $latest_version"
+
+    if [[ "$current_version" == "$latest_version" ]]; then
+        echo ""
+        echo "已是最新版本（$latest_version），无需更新。"
+        exit 0
     fi
-    if [[ -n "$npm_global_root" && "$found_path" == "$npm_global_root"* ]]; then
+    [[ -n "$current_version" ]] && echo "需要更新: $current_version -> $latest_version"
+
+    # ── 检查是否 npm 安装 ────────────────────────────────────────────────────
+    npm_prefix=""
+    if command -v npm >/dev/null 2>&1; then
+        npm_prefix=$(npm config get prefix 2>/dev/null || true)
+    fi
+    if [[ -n "$npm_prefix" && "$found_path" == "$npm_prefix"* ]]; then
         echo ""
         echo "检测到 npm 安装的 claude，使用 npm 更新..."
         old_ver="${current_version:-未知}"
@@ -386,18 +398,6 @@ elif [[ "$MODE" == "update" ]]; then
             exit 1
         fi
     fi
-
-    # ── 获取最新版本号 ─────────────────────────────────────────────────────────
-    latest_version=$(download_quiet "$DOWNLOAD_BASE_URL/latest" | tr -d '[:space:]')
-    [[ -z "$latest_version" ]] && { echo "获取最新版本号失败" >&2; exit 1; }
-    echo "最新版本: $latest_version"
-
-    if [[ "$current_version" == "$latest_version" ]]; then
-        echo ""
-        echo "已是最新版本（$latest_version），无需更新。"
-        exit 0
-    fi
-    [[ -n "$current_version" ]] && echo "需要更新: $current_version -> $latest_version"
 
     # ── 检测平台 & 下载目录 ────────────────────────────────────────────────────
     platform=$(detect_platform)

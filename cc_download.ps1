@@ -322,7 +322,7 @@ if ($Mode -eq "download") {
             if ($newVerMatch.Success) { $newVer = $newVerMatch.Groups[1].Value }
         } catch {}
         Write-Host ""
-        Write-Host "npm 更新完成：$oldVer -> $($newVer ?? '最新')"
+        Write-Host "npm 更新完成：$oldVer -> $(if ($newVer) { $newVer } else { '最新' })"
         Write-Host ""
         Write-Host "提示：建议在 settings.json 中新增配置避免安装检查："
         Write-Host '  "DISABLE_INSTALLATION_CHECKS": "1"'
